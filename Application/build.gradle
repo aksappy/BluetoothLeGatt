@@ -54,9 +54,14 @@ android {
         androidTest.java.srcDirs = ['tests/src']
 
     }
-
 }
 
+dependencies {
+    // https://mvnrepository.com/artifact/com.google.code.gson/gson
+    compile group: 'com.google.code.gson', name: 'gson', version: '2.3.1'
+    compile 'com.squareup.okhttp3:okhttp:3.4.1'
+
+}
 
 
 

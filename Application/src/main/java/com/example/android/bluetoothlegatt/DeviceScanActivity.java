@@ -24,21 +24,46 @@ import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.Base64;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.gson.Gson;
+
+import java.io.BufferedInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.Permissions;
 import java.util.ArrayList;
 import java.util.Arrays;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 /**
  * Activity for scanning and displaying available Bluetooth LE devices.
@@ -48,6 +73,8 @@ public class DeviceScanActivity extends ListActivity {
     private BluetoothAdapter mBluetoothAdapter;
     private boolean mScanning;
     private Handler mHandler;
+
+    private static boolean START_CAPTURING_DATA = false;
 
     private static final int REQUEST_ENABLE_BT = 1;
     // Stops scanning after 10 seconds.
@@ -257,7 +284,12 @@ public class DeviceScanActivity extends ListActivity {
 
         @Override
         public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
-            System.out.println(Arrays.toString(scanRecord));
+            EditText ed = (EditText) findViewById(R.id.ip_address);
+            byte[] bytes = ByteBuffer.wrap(scanRecord).order(ByteOrder
+            .LITTLE_ENDIAN).array();
+//            new PostDevice().execute(device.getAddress());
+            if(START_CAPTURING_DATA)
+                new PostData().execute( device.getAddress(), new String(bytes), ed.getText().toString());
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -272,4 +304,80 @@ public class DeviceScanActivity extends ListActivity {
         TextView deviceName;
         TextView deviceAddress;
     }
+    public static final MediaType JSON
+            = MediaType.parse("application/json; charset=utf-8");
+
+    OkHttpClient client = new OkHttpClient();
+
+    private static URL url ;
+    private class PostData extends AsyncTask<String, Void, Void>{
+        protected Void doInBackground(String... params){
+            try {
+
+                String urlString = "http://"+params[2]+"/api/report/"+params[0].replaceAll(":","")+"/data";
+                Log.d("TAGS", urlString);
+                url = new URL(urlString);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("POST");
+//                connection.setRequestProperty("Content-Type", "application/json");
+                connection.setDoInput (true);
+                connection.setDoOutput (true);
+                connection.setUseCaches (false);
+                DeviceDataObject obj = new DeviceDataObject();
+                obj.setDeviceId(params[0]);
+                obj.setData(params[1].getBytes());
+                String json = new Gson().toJson(obj);
+                Log.d("TAGSD",json);
+
+                RequestBody body = RequestBody.create(JSON, json);
+                Request request = new Request.Builder()
+                        .url(urlString)
+                        .post(body)
+                        .build();
+                Response response = client.newCall(request).execute();
+
+                Log.d("TAGSD","Got outputstream");
+//                outputStream.write(json);
+                Log.d("TAGSD","writing bytes + "+Arrays.toString(json.getBytes()));
+//                outputStream.flush();
+                Log.d("TAGSD","Flushing stream");
+//                outputStream.close();
+                Log.d("TAGSD","closing stream");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+    }
+
+    private class PostDevice extends AsyncTask<String, Void, Void>{
+        protected Void doInBackground(String... params){
+            try {
+                String urlString = "http://192.168.2.5:8080/api/report/"+params[0].replaceAll(":","");
+                Log.d("TAG", urlString);
+                url = new URL(urlString);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setDoInput(true);
+                InputStream in = new BufferedInputStream(connection.getInputStream());
+            }catch (IOException e) {
+                e.printStackTrace();
+            }finally{
+                //TODO
+            }
+            return null;
+
+        }
+    }
+
+    public void startcapturing(View view){
+        START_CAPTURING_DATA = !START_CAPTURING_DATA;
+        Button btn = (Button) findViewById(R.id.startCapturingBtn);
+        if(START_CAPTURING_DATA){
+            btn.setText("Stop Capturing");
+        } else {
+            btn.setText("Start Capturing");
+        }
+    }
+
 }
