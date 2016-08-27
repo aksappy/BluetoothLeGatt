@@ -58,6 +58,7 @@ import java.nio.ByteOrder;
 import java.security.Permissions;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
@@ -285,11 +286,18 @@ public class DeviceScanActivity extends ListActivity {
         @Override
         public void onLeScan(final BluetoothDevice device, int rssi, byte[] scanRecord) {
             EditText ed = (EditText) findViewById(R.id.ip_address);
-            byte[] bytes = ByteBuffer.wrap(scanRecord).order(ByteOrder
-            .LITTLE_ENDIAN).array();
+//            byte[] bytes = ByteBuffer.wrap(scanRecord).order(ByteOrder
+//            .BIG_ENDIAN).array();
+            byte[] bytes = ByteBuffer.wrap(scanRecord).order(ByteOrder.BIG_ENDIAN).array();
 //            new PostDevice().execute(device.getAddress());
+            Log.d("BYTES", Arrays.toString(bytes));
+            StringBuilder builder = new StringBuilder();
+            for(byte b : bytes){
+                builder.append((int)b).append(",");
+            }
+            Log.d("BYTES", "Builder Data" +builder.toString());
             if(START_CAPTURING_DATA)
-                new PostData().execute( device.getAddress(), new String(bytes), ed.getText().toString());
+                new PostData().execute( device.getAddress(), new String(builder), ed.getText().toString());
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
@@ -314,7 +322,7 @@ public class DeviceScanActivity extends ListActivity {
         protected Void doInBackground(String... params){
             try {
 
-                String urlString = "http://"+params[2]+"/api/report/"+params[0].replaceAll(":","")+"/data";
+                String urlString = "http://192.168.2.6:8080/api/report/"+params[0].replaceAll(":","")+"/data";
                 Log.d("TAGS", urlString);
                 url = new URL(urlString);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -325,10 +333,11 @@ public class DeviceScanActivity extends ListActivity {
                 connection.setUseCaches (false);
                 DeviceDataObject obj = new DeviceDataObject();
                 obj.setDeviceId(params[0]);
-                obj.setData(params[1].getBytes());
+                List<String> strings = Arrays.asList(params[1].split(","));
+                Log.d("STRINGS", "String List >> "+strings);
+                obj.setData(params[1]);
                 String json = new Gson().toJson(obj);
                 Log.d("TAGSD",json);
-
                 RequestBody body = RequestBody.create(JSON, json);
                 Request request = new Request.Builder()
                         .url(urlString)
